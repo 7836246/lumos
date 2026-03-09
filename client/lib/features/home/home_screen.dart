@@ -105,7 +105,6 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
-          // ── 3. Quick Actions ──
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -120,13 +119,23 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => context.push('/scanner'),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildQuickAction(
+                      context, isDark,
+                      icon: CupertinoIcons.doc_text_fill,
+                      label: '粘贴文本',
+                      color: LumosColors.accent,
+                      onTap: () => context.push('/text-input'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: _buildQuickAction(
                       context, isDark,
                       icon: CupertinoIcons.folder_badge_plus,
                       label: '导入文件',
-                      color: LumosColors.accent,
+                      color: LumosColors.emerald,
                       onTap: () {},
                     ),
                   ),

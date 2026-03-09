@@ -6,6 +6,8 @@ import '../../features/home/home_screen.dart';
 import '../../features/scanner/scanner_screen.dart';
 import '../../features/report/report_screen.dart';
 import '../../features/main/main_scaffold.dart';
+import '../../features/analysis/text_input_screen.dart';
+import '../../features/analysis/analysis_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
 
@@ -58,11 +60,24 @@ final appRouter = GoRouter(
         ),
       ],
     ),
-    // 扫码页面是全屏叠加，必须放在 Shell 外部
+    // ── 全屏叠加页面 (Shell 外部) ──
     GoRoute(
       path: '/scanner',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const ScannerScreen(),
+    ),
+    GoRoute(
+      path: '/text-input',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const TextInputScreen(),
+    ),
+    GoRoute(
+      path: '/analysis',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final contractText = state.extra as String? ?? '';
+        return AnalysisScreen(contractText: contractText);
+      },
     ),
   ],
 );
