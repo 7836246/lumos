@@ -104,6 +104,7 @@ async def stream_analysis(
             async for event in run_contract_analysis(
                 contract_id=contract_id,
                 raw_text=contract.raw_text,
+                session=session,
             ):
                 # 格式化为 SSE 协议
                 data = json.dumps(event.data, ensure_ascii=False)

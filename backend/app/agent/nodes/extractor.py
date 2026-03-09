@@ -9,8 +9,11 @@ Node A: 结构化抽取节点.
 
 from __future__ import annotations
 
+import json
+
 from loguru import logger
 
+from app.agent.llm import get_chat_llm
 from app.agent.state import AgentState, ExtractedClause
 from app.models.analysis import RiskCategory
 
@@ -36,13 +39,13 @@ EXTRACTOR_SYSTEM_PROMPT = """\
    - training_bond: 培训服务期/违约金
 
 ## 输出格式要求:
-请以 JSON 数组的形式输出，每个元素包含:
-- clause_index: 条款序号 (从 1 开始)
-- title: 条款标题
-- content: 条款完整内容 (已纠错)
+请严格以 JSON 数组的形式输出，每个元素包含:
+- clause_index: 条款序号 (从 1 开始, 整数)
+- title: 条款标题 (字符串)
+- content: 条款完整内容 (已纠错, 字符串)
 - category: 风险分类 (如果不涉及上述分类，设为 null)
 
-只输出 JSON，不要添加任何额外说明。
+只输出合法的 JSON 数组，不要添加 markdown 代码块标记或任何额外说明。
 """
 
 
@@ -51,33 +54,48 @@ async def extract_clauses(state: AgentState) -> AgentState:
     Node A: 结构化提取节点.
 
     将 OCR 原始文本转换为结构化条款列表。
-    当前为骨架实现，后续接入 LLM 进行真正的智能提取。
     """
     logger.info(f"📝 [Node A] 开始结构化提取 | 合同ID: {state.contract_id}")
     state.current_node = "extractor"
 
     try:
         raw = state.raw_text.strip()
+        llm = get_chat_llm()
 
-        # ── TODO: 接入 LLM 进行智能结构化提取 ──
-        # 当前使用简单的段落分割作为占位实现
-        # 正式版将调用: langchain_openai.ChatOpenAI + 结构化输出
+        # 调用大模型进行结构化提取
+        messages = [
+            {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
+            {"role": "user", "content": f"请对以下劳动合同文本进行结构化提取:\n\n{raw}"},
+        ]
 
-        paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
+        response = await llm.ainvoke(messages)
+        content = response.content.strip()
+
+        # 清理可能的 markdown 代码块标记
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1]
+        if content.endswith("```"):
+            content = content.rsplit("```", 1)[0]
+        content = content.strip()
+
+        # 解析 JSON
+        parsed = json.loads(content)
 
         clauses: list[ExtractedClause] = []
-        for i, paragraph in enumerate(paragraphs, start=1):
-            # 简单启发式: 尝试从段落中提取标题
-            lines = paragraph.split("\n", 1)
-            title = lines[0][:50] if lines else f"条款 {i}"
-            content = paragraph
+        for item in parsed:
+            category = None
+            if item.get("category"):
+                try:
+                    category = RiskCategory(item["category"])
+                except ValueError:
+                    logger.warning(f"  ⚠️ 未知分类: {item['category']}, 跳过")
 
             clauses.append(
                 ExtractedClause(
-                    clause_index=i,
-                    title=title,
-                    content=content,
-                    category=None,  # LLM 接入后会自动分类
+                    clause_index=item["clause_index"],
+                    title=item["title"],
+                    content=item["content"],
+                    category=category,
                 )
             )
 
@@ -86,9 +104,39 @@ async def extract_clauses(state: AgentState) -> AgentState:
 
         logger.info(f"✅ [Node A] 提取完成 | 共 {len(clauses)} 条条款")
 
+    except json.JSONDecodeError as e:
+        error_msg = f"[Node A] LLM 返回的 JSON 解析失败: {e}"
+        logger.error(error_msg)
+        state.errors.append(error_msg)
+
+        # 降级: 简单段落分割
+        logger.info("  ⬇️ 降级为段落分割模式")
+        paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
+        state.extracted_clauses = [
+            ExtractedClause(
+                clause_index=i,
+                title=p.split("\n", 1)[0][:50],
+                content=p,
+                category=None,
+            )
+            for i, p in enumerate(paragraphs, 1)
+        ]
+
     except Exception as e:
         error_msg = f"[Node A] 结构化提取失败: {e}"
         logger.error(error_msg)
         state.errors.append(error_msg)
+
+        # 降级
+        paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
+        state.extracted_clauses = [
+            ExtractedClause(
+                clause_index=i,
+                title=p.split("\n", 1)[0][:50],
+                content=p,
+                category=None,
+            )
+            for i, p in enumerate(paragraphs, 1)
+        ]
 
     return state

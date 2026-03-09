@@ -1,41 +1,68 @@
 """
 Node C: 风险审查节点.
 
-综合结构化条款和检索到的法规，对合同进行逐项风险评估、
-整体打分，并生成可直接发送给 HR 的谈判话术。
+综合结构化条款和检索到的法规，通过大模型对合同进行
+逐项风险评估、整体打分，并生成可直接发送给 HR 的谈判话术。
 """
 
 from __future__ import annotations
 
+import json
+
 from loguru import logger
 
+from app.agent.llm import get_chat_llm
 from app.agent.state import AgentState, RiskAssessment
 from app.models.analysis import RiskLevel
 
 # ── 风险审查系统提示词 ─────────────────────────────────────────
 
 REVIEWER_SYSTEM_PROMPT = """\
-你是一位站在劳动者立场的合同风险审查专家。你需要综合合同条款和相关法律条文，对每一条可能存在风险的条款进行评估。
+你是一位站在劳动者立场的合同风险审查专家。请综合合同条款和相关法律条文，对每一条可能存在风险的条款进行评估。
 
 ## 评估维度:
 1. **风险等级**: high(高危) / medium(警惕) / low(关注) / safe(合规)
 2. **大白话解读**: 用普通人能听懂的语言解释这条条款意味着什么
 3. **法律依据**: 引用具体的法律条文说明为什么这是风险
-4. **谈判话术**: 提供一段可以直接复制、通过微信发送给 HR 的建议话术
+4. **谈判话术**: 提供一段可以直接复制、通过微信发送给 HR 的建议话术。话术语气要专业但友好，有理有据，不卑不亢。
 
-## 评分标准:
+## 评分标准 (score 字段):
 - 0-30: 严重违法，极度危险
 - 31-50: 存在重大风险，需要谈判
 - 51-70: 有一定风险，建议关注
 - 71-85: 基本合规，但有改进空间
 - 86-100: 完全合规
 
-## 输出要求:
-对每条风险条款输出 JSON 对象，包含:
-- category, level, title, original_clause, explanation, legal_basis, negotiation_tip, score
+## 风险分类 (category 字段):
+non_compete, probation_salary, probation_insurance, salary_deduction,
+job_description, obedience_clause, resignation, leave_rights,
+jurisdiction, training_bond
+
+## 输出格式:
+请严格以 JSON 对象的形式输出，包含:
+- risks: 风险条目数组，每个元素包含: category, level, title, original_clause, explanation, legal_basis, negotiation_tip, score
+- overall_score: 整体评分 (0-100, 整数)
+- overall_level: 整体风险等级 (high/medium/low/safe)
+- summary: 一句话总结 (给打工人看的大白话)
 
 语言风格要亲切、平易近人，像一位热心的前辈在帮你看合同。
+只输出合法的 JSON，不要添加 markdown 代码块标记或任何额外说明。
 """
+
+
+def _build_review_context(state: AgentState) -> str:
+    """构建审查上下文 (条款 + 法条)."""
+    parts = ["## 合同条款:\n"]
+    for clause in state.extracted_clauses:
+        cat = f" [{clause.category.value}]" if clause.category else ""
+        parts.append(f"### 第 {clause.clause_index} 条{cat}: {clause.title}\n{clause.content}\n")
+
+    if state.legal_references:
+        parts.append("\n## 相关法律条文:\n")
+        for ref in state.legal_references:
+            parts.append(f"- {ref.law_name} {ref.article}: {ref.content}\n")
+
+    return "\n".join(parts)
 
 
 async def review_risks(state: AgentState) -> AgentState:
@@ -43,75 +70,63 @@ async def review_risks(state: AgentState) -> AgentState:
     Node C: 风险审查节点.
 
     对提取的条款进行逐项风险评估，生成评分和谈判话术。
-    当前为骨架实现，后续接入 LLM 进行深度分析。
     """
     logger.info(f"🔍 [Node C] 开始风险审查 | 合同ID: {state.contract_id}")
     state.current_node = "reviewer"
 
     try:
+        llm = get_chat_llm()
+        context = _build_review_context(state)
+
+        messages = [
+            {"role": "system", "content": REVIEWER_SYSTEM_PROMPT},
+            {"role": "user", "content": f"请对以下合同进行风险审查:\n\n{context}"},
+        ]
+
+        response = await llm.ainvoke(messages)
+        content = response.content.strip()
+
+        # 清理可能的 markdown 代码块标记
+        if content.startswith("```"):
+            content = content.split("\n", 1)[-1]
+        if content.endswith("```"):
+            content = content.rsplit("```", 1)[0]
+        content = content.strip()
+
+        parsed = json.loads(content)
+
+        # 解析风险条目
         assessments: list[RiskAssessment] = []
-
-        # ── TODO: 接入 LLM 进行真正的风险审查推理 ──
-        # 将 extracted_clauses + legal_references 组合为上下文，让大模型进行深度分析
-        # 当前为占位逻辑
-
-        for clause in state.extracted_clauses:
-            if clause.category is not None:
-                # 查找关联的法规
-                related_laws = [
-                    ref
-                    for ref in state.legal_references
-                    if clause.category
-                    and clause.category.value
-                    in BUILTIN_CATEGORY_HINTS.get(clause.category.value, [])
-                ]
-                legal_basis = (
-                    "; ".join(f"{r.law_name} {r.article}" for r in related_laws)
-                    if related_laws
-                    else "待 AI 分析后补充法律依据"
-                )
+        for item in parsed.get("risks", []):
+            try:
+                from app.models.analysis import RiskCategory
 
                 assessments.append(
                     RiskAssessment(
-                        category=clause.category,
-                        level=RiskLevel.MEDIUM,
-                        title=f"⚠️ {clause.title} — 需要关注",
-                        original_clause=clause.content[:200],
-                        explanation="此条款涉及员工权益，建议仔细审阅。（LLM 接入后将提供详细大白话解读）",
-                        legal_basis=legal_basis,
-                        negotiation_tip="建议与 HR 沟通此条款的具体执行方式。（LLM 接入后将生成专业话术）",
-                        score=60,
+                        category=RiskCategory(item["category"]),
+                        level=RiskLevel(item["level"]),
+                        title=item["title"],
+                        original_clause=item.get("original_clause", ""),
+                        explanation=item["explanation"],
+                        legal_basis=item.get("legal_basis", ""),
+                        negotiation_tip=item.get("negotiation_tip", ""),
+                        score=int(item.get("score", 50)),
                     )
                 )
+            except (ValueError, KeyError) as e:
+                logger.warning(f"  ⚠️ 风险条目解析跳过: {e}")
+                continue
 
-        # 计算整体评分
-        if assessments:
-            total = sum(a.score for a in assessments)
-            state.overall_score = total // len(assessments)
-        else:
-            state.overall_score = 85  # 没检出风险，打个较高但不满的分
-
-        # 确定整体等级
-        if state.overall_score <= 30:
-            state.overall_level = RiskLevel.HIGH
-        elif state.overall_score <= 60:
+        # 整体评分
+        state.overall_score = int(parsed.get("overall_score", 60))
+        try:
+            state.overall_level = RiskLevel(parsed.get("overall_level", "medium"))
+        except ValueError:
             state.overall_level = RiskLevel.MEDIUM
-        elif state.overall_score <= 85:
-            state.overall_level = RiskLevel.LOW
-        else:
-            state.overall_level = RiskLevel.SAFE
 
-        # 生成一句话总结
-        risk_count = len(assessments)
-        high_count = sum(1 for a in assessments if a.level == RiskLevel.HIGH)
-        state.summary = (
-            f"共扫描到 {len(state.extracted_clauses)} 条条款, "
-            f"发现 {risk_count} 项风险点"
-            + (f" (其中 {high_count} 项高危)" if high_count > 0 else "")
-            + f", 整体安全评分 {state.overall_score}/100。"
-        )
+        state.summary = parsed.get("summary", "分析完成，请查看详细风险报告。")
 
-        # 按风险等级排序 (高危在前)
+        # 排序: 高危在前
         level_order = {
             RiskLevel.HIGH: 0,
             RiskLevel.MEDIUM: 1,
@@ -123,23 +138,47 @@ async def review_risks(state: AgentState) -> AgentState:
 
         logger.info(
             f"✅ [Node C] 风险审查完成 | 评分: {state.overall_score}/100 | "
-            f"风险: {risk_count} 项"
+            f"风险: {len(assessments)} 项"
         )
+
+    except json.JSONDecodeError as e:
+        error_msg = f"[Node C] LLM 返回的 JSON 解析失败: {e}"
+        logger.error(error_msg)
+        state.errors.append(error_msg)
+        _fallback_review(state)
 
     except Exception as e:
         error_msg = f"[Node C] 风险审查失败: {e}"
         logger.error(error_msg)
         state.errors.append(error_msg)
+        _fallback_review(state)
 
     return state
 
 
-# 分类关联表 (用于初版的简单匹配)
-BUILTIN_CATEGORY_HINTS: dict[str, list[str]] = {
-    "non_compete": ["non_compete"],
-    "probation_salary": ["probation_salary"],
-    "probation_insurance": ["probation_insurance"],
-    "salary_deduction": ["salary_deduction"],
-    "resignation": ["resignation"],
-    "training_bond": ["training_bond"],
-}
+def _fallback_review(state: AgentState) -> None:
+    """降级审查: LLM 失败时的兜底逻辑."""
+    logger.info("  ⬇️ 降级为规则审查模式")
+    assessments = []
+    for clause in state.extracted_clauses:
+        if clause.category is not None:
+            assessments.append(
+                RiskAssessment(
+                    category=clause.category,
+                    level=RiskLevel.MEDIUM,
+                    title=f"⚠️ {clause.title} — 需要关注",
+                    original_clause=clause.content[:200],
+                    explanation="AI 深度分析暂时不可用，但此条款涉及员工权益敏感领域，建议仔细审阅。",
+                    legal_basis="建议查阅《劳动合同法》相关条款",
+                    negotiation_tip="建议与 HR 当面沟通此条款的具体执行方式和保障措施。",
+                    score=50,
+                )
+            )
+
+    state.risk_assessments = assessments
+    state.overall_score = 50 if assessments else 80
+    state.overall_level = RiskLevel.MEDIUM if assessments else RiskLevel.LOW
+    state.summary = (
+        f"⚠️ AI 深度分析暂不可用，已使用规则引擎完成初步审查。"
+        f"共发现 {len(assessments)} 项需关注条款。"
+    )
