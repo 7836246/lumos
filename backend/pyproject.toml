@@ -1,0 +1,96 @@
+[project]
+name = "lumos-server"
+version = "0.1.0"
+description = "🔍 Lumos · 契光鉴微 — AI 合同风险排查引擎"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Lumos Contributors" },
+]
+
+dependencies = [
+    # ---- Web Framework ----
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-multipart>=0.0.18",
+
+    # ---- AI / Agent ----
+    "langchain>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langgraph>=0.3.0",
+    "pydantic-ai>=0.1.0",
+
+    # ---- RAG & Document ----
+    "llama-index>=0.12.0",
+
+    # ---- Database ----
+    "sqlmodel>=0.0.22",
+    "aiosqlite>=0.21.0",
+
+    # ---- Configuration ----
+    "pydantic-settings>=2.7.0",
+
+    # ---- Utilities ----
+    "httpx>=0.28.0",
+    "sse-starlette>=2.2.0",
+    "loguru>=0.7.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "pre-commit>=4.0.0",
+]
+
+postgres = [
+    "asyncpg>=0.30.0",
+    "psycopg2-binary>=2.9.10",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "UP",    # pyupgrade
+    "ANN",   # flake8-annotations
+    "ASYNC", # flake8-async
+    "S",     # flake8-bandit
+]
+ignore = [
+    "ANN101", # Missing type annotation for `self`
+    "ANN102", # Missing type annotation for `cls`
+    "ANN401", # Dynamically typed expressions (typing.Any) are disallowed
+    "S101",   # Use of `assert` detected (OK in tests)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
