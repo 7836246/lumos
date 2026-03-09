@@ -82,6 +82,7 @@ coverage.xml
 *.db-journal
 *.sqlite
 *.sqlite3
+chroma_db/
 
 # ---- Logs ----
 logs/

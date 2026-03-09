@@ -17,6 +17,7 @@ from app.api.v1.router import v1_router
 from app.core.config import get_settings
 from app.core.database import init_db
 from app.core.logging import setup_logging
+from app.rag.vector_store import init_vector_store
 
 
 @asynccontextmanager
@@ -37,6 +38,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 初始化数据库
     await init_db()
     logger.info("✅ 数据库初始化完成")
+
+    # 初始化向量库
+    init_vector_store()
 
     logger.info(f"🚀 服务已启动: http://{settings.app_host}:{settings.app_port}")
     logger.info(f"📚 API 文档: http://{settings.app_host}:{settings.app_port}/docs")

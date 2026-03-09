@@ -23,6 +23,8 @@ dependencies = [
 
     # ---- RAG & Document ----
     "llama-index>=0.12.0",
+    "chromadb>=0.6.0",
+    "sentence-transformers>=3.0.0",
 
     # ---- Database ----
     "sqlmodel>=0.0.22",
