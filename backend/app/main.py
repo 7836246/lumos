@@ -9,8 +9,11 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from app.api.v1.router import v1_router
@@ -44,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     logger.info(f"🚀 服务已启动: http://{settings.app_host}:{settings.app_port}")
     logger.info(f"📚 API 文档: http://{settings.app_host}:{settings.app_port}/docs")
+    logger.info(f"🌐 Web 前端: http://{settings.app_host}:{settings.app_port}/")
 
     yield
 
@@ -82,18 +86,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ── 注册路由 ──
+    # ── 注册 API 路由 ──
     app.include_router(v1_router)
 
-    # ── 根路径 ──
-    @app.get("/", tags=["🏠 根"])
-    async def root() -> dict:
-        return {
-            "service": settings.app_name,
-            "version": settings.app_version,
-            "docs": "/docs",
-            "health": "/api/v1/health",
-        }
+    # ── 挂载静态文件 ──
+    static_dir = Path(__file__).parent / "web" / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    # ── Web 前端路由 (放在最后，避免抢占 API 路径) ──
+    from app.web.routes import web_router
+    app.include_router(web_router)
 
     return app
 

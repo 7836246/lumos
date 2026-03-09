@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lumos — AI 合同风险排查</title>
+    <meta name="description" content="开源免费的劳动合同风险检测工具，站在劳动者视角，深度适配中国劳动法。">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <!-- Nav -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <div class="brand-mark">L</div>
+            <span class="brand-name">Lumos</span>
+        </div>
+        <div class="nav-links">
+            <a href="#home" class="nav-link active" data-section="home">首页</a>
+            <a href="#analyze" class="nav-link" data-section="analyze">合同排查</a>
+            <a href="#admin" class="nav-link" data-section="admin">设置</a>
+            <a href="/docs" target="_blank" class="nav-link">API</a>
+        </div>
+    </nav>
+
+    <!-- ── SECTION: Home ── -->
+    <section id="home" class="section active">
+        <div class="hero">
+            <p class="hero-badge">开源 · 免费 · 深度适配中国劳动法</p>
+            <h1 class="hero-title">让每一份合同<br>都经得起审视</h1>
+            <p class="hero-desc">
+                Lumos 是一站式 AI 合同风险排查引擎。<br>
+                粘贴合同文本，即刻获得逐条风险分析、法律依据和可直接使用的谈判话术。
+            </p>
+            <div class="hero-actions">
+                <button class="btn btn-primary btn-lg" onclick="switchSection('analyze')">开始排查</button>
+                <a href="https://github.com/user/lumos" target="_blank" class="btn btn-ghost btn-lg">查看源码</a>
+            </div>
+        </div>
+
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-num">01</div>
+                <h3>条款结构化</h3>
+                <p>AI 自动提取合同中的关键条款，按风险维度分类标注</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-num">02</div>
+                <h3>法规语义检索</h3>
+                <p>基于向量数据库秒级匹配相关法条，覆盖 5 部核心劳动法律</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-num">03</div>
+                <h3>白话解读</h3>
+                <p>将晦涩法律条款翻译成普通人看得懂的语言</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-num">04</div>
+                <h3>谈判话术</h3>
+                <p>针对每项风险生成专业且友好的沟通话术，直接复制使用</p>
+            </div>
+        </div>
+
+        <div class="metrics">
+            <div class="metric"><span class="metric-val">10</span><span class="metric-label">风险维度</span></div>
+            <div class="metric-divider"></div>
+            <div class="metric"><span class="metric-val">25+</span><span class="metric-label">法条覆盖</span></div>
+            <div class="metric-divider"></div>
+            <div class="metric"><span class="metric-val">5</span><span class="metric-label">法律法规</span></div>
+            <div class="metric-divider"></div>
+            <div class="metric"><span class="metric-val">SSE</span><span class="metric-label">实时流式</span></div>
+        </div>
+    </section>
+
+    <!-- ── SECTION: Analyze ── -->
+    <section id="analyze" class="section">
+        <div id="input-phase" class="phase">
+            <div class="page-header">
+                <h2>合同风险排查</h2>
+                <p>粘贴劳动合同全文，AI 将逐条分析风险并推荐应对策略</p>
+            </div>
+            <div class="input-wrap">
+                <div class="notice">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    <span>合同文本仅用于本次分析，不会存储或发送至第三方</span>
+                </div>
+                <textarea id="contract-input"
+                    placeholder="将劳动合同全文粘贴到这里&#10;&#10;支持从 Word、PDF 复制的文本，Lumos 会自动格式化并提取条款。&#10;建议粘贴完整合同文本以获得最准确的分析结果。"></textarea>
+                <div class="input-bar">
+                    <span id="char-count" class="char-count">0 字</span>
+                    <button id="btn-analyze" class="btn btn-primary" onclick="startAnalysis()" disabled>开始分析</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="progress-phase" class="phase" style="display:none">
+            <div class="progress-center">
+                <div class="ring-wrap">
+                    <svg class="ring" viewBox="0 0 120 120">
+                        <circle class="ring-track" cx="60" cy="60" r="52" />
+                        <circle id="ring-fill" class="ring-value" cx="60" cy="60" r="52" />
+                    </svg>
+                    <span id="ring-pct" class="ring-label">0%</span>
+                </div>
+                <p id="progress-msg" class="progress-msg">提交中</p>
+                <div id="node-pills" class="node-pills"></div>
+            </div>
+        </div>
+
+        <div id="result-phase" class="phase" style="display:none">
+            <div id="score-card" class="score-card"></div>
+            <p id="result-summary" class="summary-text"></p>
+            <div class="section-label">风险详情</div>
+            <div id="risk-list"></div>
+            <div class="center-actions">
+                <button class="btn btn-ghost" onclick="resetAnalysis()">分析新合同</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── SECTION: Admin ── -->
+    <section id="admin" class="section">
+        <div class="page-header">
+            <h2>系统设置</h2>
+            <p>配置后端运行参数与 AI 模型</p>
+        </div>
+
+        <div class="settings-grid">
+            <div class="settings-card">
+                <h3>模型配置</h3>
+                <div class="field">
+                    <label>LLM 提供商</label>
+                    <select id="llm-provider">
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="qwen">通义千问</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>API Base URL</label>
+                    <input type="text" id="llm-base-url" placeholder="https://api.deepseek.com/v1">
+                </div>
+                <div class="field">
+                    <label>Model Name</label>
+                    <input type="text" id="llm-model" placeholder="deepseek-chat">
+                </div>
+                <div class="field">
+                    <label>API Key</label>
+                    <input type="password" id="llm-api-key" placeholder="sk-...">
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="saveModelConfig()">保存</button>
+            </div>
+
+            <div class="settings-card">
+                <h3>系统状态</h3>
+                <div class="kv-list">
+                    <div class="kv"><span>服务</span><span id="s-health" class="val loading">检测中</span></div>
+                    <div class="kv"><span>版本</span><span id="s-version" class="val">—</span></div>
+                    <div class="kv"><span>环境</span><span id="s-env" class="val">—</span></div>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="checkHealth()">刷新</button>
+            </div>
+
+            <div class="settings-card">
+                <h3>知识库</h3>
+                <div class="kv-list">
+                    <div class="kv"><span>法条总数</span><span class="val">25+ 条</span></div>
+                    <div class="kv"><span>覆盖法律</span><span class="val">5 部</span></div>
+                    <div class="kv"><span>向量引擎</span><span class="val">ChromaDB</span></div>
+                </div>
+                <p class="hint">编辑 <code>app/rag/law_corpus.py</code> 添加法条后重启即可自动重建向量库</p>
+            </div>
+
+            <div class="settings-card">
+                <h3>安全</h3>
+                <div class="field">
+                    <label>API 鉴权密钥</label>
+                    <input type="password" id="api-secret" placeholder="留空则不启用">
+                </div>
+                <label class="check-row">
+                    <input type="checkbox" checked> 允许跨域请求
+                </label>
+                <button class="btn btn-primary btn-sm" onclick="saveSecurityConfig()">保存</button>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <span>Lumos · 契光鉴微</span>
+        <span class="sep">|</span>
+        <span>Apache-2.0</span>
+        <span class="sep">|</span>
+        <a href="https://github.com/user/lumos" target="_blank">GitHub</a>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>
