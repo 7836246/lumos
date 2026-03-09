@@ -1,0 +1,40 @@
+# ============================================================
+# Lumos — Docker Compose 一键部署
+# ============================================================
+# 使用方式:
+#   1. 复制 backend/.env.example 为 backend/.env 并填入配置
+#   2. docker compose up -d
+#   3. 访问 http://localhost:8000/docs
+# ============================================================
+
+services:
+  # ── Lumos Server (AI 合同排查引擎) ──
+  server:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lumos-server
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - DATABASE_URL=sqlite+aiosqlite:///./data/lumos.db
+    volumes:
+      - lumos-data:/app/data    # 持久化数据库
+      - lumos-logs:/app/logs    # 持久化日志
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  lumos-data:
+    driver: local
+  lumos-logs:
+    driver: local
